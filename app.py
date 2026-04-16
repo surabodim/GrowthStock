@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 """
-Growth Stock Scanner — Flask Web Application
+Growth Stock Scanner -- Flask Web Application
 Backend: Python + Flask + yfinance (free data)
 BugFix v2: robust fetching, fixed filters, better error handling
 """
@@ -13,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = Flask(__name__)
 
-# ─── Stock Universe ────────────────────────────────────────────────────────────
+# --- Stock Universe ------------------------------------------------------------
 US_TICKERS = [
     "CELH","CAVA","POWL","ASTS","RKLB","ACHR","JOBY","SOUN",
     "AXON","KTOS","PRCT","INSP","AAON","FTAI","CIEN",
@@ -49,7 +50,7 @@ EU_TICKERS = [
 
 ALL_TICKERS = list(dict.fromkeys(US_TICKERS + ASIA_TICKERS + EU_TICKERS))  # preserve order, dedupe
 
-# ─── Global State ─────────────────────────────────────────────────────────────
+# --- Global State -------------------------------------------------------------
 scan_state = {
     "running":   False,
     "progress":  0,
@@ -63,7 +64,7 @@ scan_state = {
 scan_lock = threading.Lock()
 
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+# --- Helpers ------------------------------------------------------------------
 def safe_float(val, multiplier=1):
     try:
         if val is None:
@@ -89,7 +90,7 @@ def fmt_cap(val):
         return None
 
 
-# ─── Scoring Engine ────────────────────────────────────────────────────────────
+# --- Scoring Engine ------------------------------------------------------------
 def score_stock(d: dict) -> dict:
     g = v = q = 0.0
 
@@ -99,14 +100,14 @@ def score_stock(d: dict) -> dict:
     mom6   = d.get("price_mom_6m")    or 0
     mom12  = d.get("price_mom_12m")   or 0
 
-    # Growth (0–40)
+    # Growth (0-40)
     g += min(max(rev_g,  0) * 0.25, 15)
     g += min(max(earn_g, 0) * 0.20, 12)
     g += min(max(eps_g,  0) * 0.15,  8)
     g += min(max(mom6,   0) * 0.04,  3)
     g += min(max(mom12,  0) * 0.03,  2)
 
-    # Value (0–30)
+    # Value (0-30)
     pe  = d.get("pe_ratio")  or 0
     peg = d.get("peg_ratio") or 0
     pe  = pe  if pe  > 0 else 999
@@ -116,7 +117,7 @@ def score_stock(d: dict) -> dict:
     elif peg < 1.5: v += 10
     elif peg < 2:   v +=  5
 
-    # Quality (0–30)
+    # Quality (0-30)
     roe     = d.get("roe")          or 0
     de      = d.get("debt_equity")  or 0
     de      = de if de > 0 else 999
@@ -139,7 +140,7 @@ def score_stock(d: dict) -> dict:
     }
 
 
-# ─── Fetch Single Ticker ───────────────────────────────────────────────────────
+# --- Fetch Single Ticker -------------------------------------------------------
 def fetch_ticker(ticker: str):
     """
     Returns a scored dict on success, None on failure.
@@ -148,7 +149,7 @@ def fetch_ticker(ticker: str):
     try:
         t = yf.Ticker(ticker)
 
-        # ── Basic info (more reliable in newer yfinance) ──
+        # -- Basic info (more reliable in newer yfinance) --
         try:
             info = t.info
         except Exception:
@@ -166,7 +167,7 @@ def fetch_ticker(ticker: str):
         if not name:
             return None
 
-        # ── Price history for momentum ──
+        # -- Price history for momentum --
         mom6 = mom12 = None
         try:
             hist = t.history(period="1y", auto_adjust=True, timeout=15)
@@ -179,7 +180,7 @@ def fetch_ticker(ticker: str):
         except Exception:
             pass
 
-        # ── EPS growth ──
+        # -- EPS growth --
         eps_growth = None
         try:
             eps_t = info.get("trailingEps")
@@ -189,7 +190,7 @@ def fetch_ticker(ticker: str):
         except Exception:
             pass
 
-        # ── Revenue / Earnings growth (yfinance returns as ratio e.g. 0.23 = 23%) ──
+        # -- Revenue / Earnings growth (yfinance returns as ratio e.g. 0.23 = 23%) --
         rev_raw  = info.get("revenueGrowth")
         earn_raw = info.get("earningsGrowth")
 
@@ -206,21 +207,21 @@ def fetch_ticker(ticker: str):
         roe_raw = info.get("returnOnEquity")
         roe    = norm_growth(roe_raw)
 
-        # ── Market cap ──
+        # -- Market cap --
         mkt_cap = info.get("marketCap")
         try:
             mkt_cap = int(mkt_cap) if mkt_cap else None
         except Exception:
             mkt_cap = None
 
-        # ── Build row ──
+        # -- Build row --
         row = {
             "ticker":          ticker,
             "name":            name[:38],
-            "exchange":        str(info.get("exchange") or info.get("quoteType") or "—"),
+            "exchange":        str(info.get("exchange") or info.get("quoteType") or "--"),
             "sector":          str(info.get("sector")   or info.get("sectorDisp")   or "Other"),
-            "industry":        str((info.get("industry") or info.get("industryDisp") or "—"))[:36],
-            "country":         str(info.get("country")  or "—"),
+            "industry":        str((info.get("industry") or info.get("industryDisp") or "--"))[:36],
+            "country":         str(info.get("country")  or "--"),
             "market_cap":      mkt_cap,
             "market_cap_fmt":  fmt_cap(mkt_cap),
             "revenue_growth":  rev_g,
@@ -250,7 +251,7 @@ def fetch_ticker(ticker: str):
         return None
 
 
-# ─── Background Scanner ────────────────────────────────────────────────────────
+# --- Background Scanner --------------------------------------------------------
 def run_scan():
     with scan_lock:
         if scan_state["running"]:
@@ -273,7 +274,7 @@ def run_scan():
             if result is not None:
                 scan_state["results"].append(result)
 
-    # ── BUG FIX: reduced workers to avoid Yahoo rate-limiting ──
+    # -- BUG FIX: reduced workers to avoid Yahoo rate-limiting --
     with ThreadPoolExecutor(max_workers=6) as ex:
         futs = [ex.submit(fetch_and_update, t) for t in ALL_TICKERS]
         for _ in as_completed(futs):
@@ -287,7 +288,7 @@ def run_scan():
         scan_state["progress"]  = 100
 
 
-# ─── Routes ───────────────────────────────────────────────────────────────────
+# --- Routes -------------------------------------------------------------------
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -320,7 +321,7 @@ def api_scan_status():
 
 @app.route("/api/debug")
 def api_debug():
-    """ดู errors ที่เกิดระหว่าง scan"""
+    """Show errors that occurred during scan"""
     with scan_lock:
         return jsonify({
             "total_results": len(scan_state["results"]),
@@ -351,32 +352,32 @@ def api_stocks():
 
     out = []
     for d in data:
-        # ── BUG FIX: search filter ──
+        # -- BUG FIX: search filter --
         if search:
             t_match = search in (d.get("ticker") or "").lower()
             n_match = search in (d.get("name")   or "").lower()
             if not t_match and not n_match:
                 continue
 
-        # ── BUG FIX: sector filter ──
+        # -- BUG FIX: sector filter --
         if sector != "All":
             if (d.get("sector") or "Other") != sector:
                 continue
 
-        # ── BUG FIX: market cap filter — don't filter out stocks with no market cap data ──
+        # -- BUG FIX: market cap filter -- don't filter out stocks with no market cap data --
         mc = d.get("market_cap")
         if mc is not None and cap_limit < float("inf"):
             if mc > cap_limit:
                 continue
         # (if mc is None, we let it through so user can still see the stock)
 
-        # ── score filter ──
+        # -- score filter --
         if (d.get("total_score") or 0) < min_score:
             continue
 
         out.append(d)
 
-    # ── BUG FIX: robust sort ──
+    # -- BUG FIX: robust sort --
     reverse = (sort_dir == "desc")
     def sort_key(x):
         val = x.get(sort_by)
@@ -403,11 +404,12 @@ def api_sectors():
 
 
 if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 5000))
     print("\n" + "=" * 55)
-    print("  📈  Growth Stock Scanner — Web App  (v2 fixed)")
+    print("  Growth Stock Scanner -- Web App")
     print("=" * 55)
-    print("  Open your browser:  http://localhost:5000")
-    print("  Debug endpoint:     http://localhost:5000/api/debug")
+    print(f"  Open your browser:  http://localhost:{port}")
     print("  Press Ctrl+C to stop")
     print("=" * 55 + "\n")
-    app.run(debug=False, host="0.0.0.0", port=5000, threaded=True)
+    app.run(debug=False, host="0.0.0.0", port=port, threaded=True)
