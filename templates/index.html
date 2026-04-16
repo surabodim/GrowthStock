@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d1220">
+<title>Growth Stock Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<header class="header">
+  <div class="logo">
+    <span class="logo-icon">▲</span>
+    <div class="logo-text">
+      <div class="logo-title">GROWTH SCANNER</div>
+      <div class="logo-sub">Global · Small Cap · Free Data</div>
+    </div>
+  </div>
+  <div class="header-center">
+    <div class="stat-pill"><span class="stat-n" id="hdr-count">—</span> stocks</div>
+    <div class="stat-pill">Scan: <span id="hdr-lastscan">—</span></div>
+    <div class="live-dot" id="live-dot"></div>
+  </div>
+  <button class="btn-scan" id="btn-scan" onclick="startScan()">
+    <span class="btn-icon">⟳</span>
+    <span id="btn-label">Scan Now</span>
+  </button>
+</header>
+
+<div class="progress-wrap">
+  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+  <div class="progress-label" id="progress-label">Ready</div>
+</div>
+
+<div class="filterbar">
+  <div class="filter-group">
+    <label class="filter-label">Search</label>
+    <input class="filter-input" id="f-search" type="search" autocomplete="off"
+           placeholder="TICKER or name…" oninput="applyFilters()">
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Sector</label>
+    <select class="filter-select" id="f-sector" onchange="applyFilters()">
+      <option value="All">All Sectors</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Market Cap</label>
+    <select class="filter-select" id="f-cap" onchange="applyFilters()">
+      <option value="500m">&lt; $500M</option>
+      <option value="1b">&lt; $1B</option>
+      <option value="2b" selected>&lt; $2B</option>
+      <option value="5b">&lt; $5B</option>
+      <option value="10b">&lt; $10B</option>
+      <option value="all">All sizes</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Min Score</label>
+    <select class="filter-select" id="f-score" onchange="applyFilters()">
+      <option value="0">All scores</option>
+      <option value="10">10+</option>
+      <option value="20">20+</option>
+      <option value="30">30+</option>
+      <option value="40">40+</option>
+      <option value="50">50+</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Show</label>
+    <select class="filter-select" id="f-limit" onchange="applyFilters()">
+      <option value="10">Top 10</option>
+      <option value="25">Top 25</option>
+      <option value="50" selected>Top 50</option>
+      <option value="100">Top 100</option>
+    </select>
+  </div>
+  <button class="btn-reset" onclick="resetFilters()">Reset</button>
+</div>
+
+<div class="score-legend">
+  <span class="legend-item"><span class="dot dot-gold"></span>Score &ge; 50</span>
+  <span class="legend-item"><span class="dot dot-cyan"></span>Score &ge; 30</span>
+  <span class="legend-item"><span class="dot dot-gray"></span>&lt; 30</span>
+  <span class="legend-sep">|</span>
+  <span class="legend-item score-pill-demo growth-pill">G = Growth /40</span>
+  <span class="legend-item score-pill-demo value-pill">V = Value /30</span>
+  <span class="legend-item score-pill-demo quality-pill">Q = Quality /30</span>
+</div>
+
+<!-- DESKTOP TABLE -->
+<div class="table-wrap">
+  <table class="stock-table" id="stock-table">
+    <thead>
+      <tr>
+        <th class="th-rank">#</th>
+        <th class="sortable" data-col="name">Company</th>
+        <th class="sortable" data-col="ticker">Ticker</th>
+        <th class="sortable" data-col="exchange">Exchange</th>
+        <th class="sortable" data-col="sector">Sector</th>
+        <th class="sortable th-num" data-col="market_cap">Mkt Cap</th>
+        <th class="sortable th-score" data-col="total_score">Score</th>
+        <th class="th-subscores">G / V / Q</th>
+        <th class="sortable th-num" data-col="revenue_growth">Rev Gr%</th>
+        <th class="sortable th-num" data-col="earnings_growth">Earn Gr%</th>
+        <th class="sortable th-num" data-col="eps_growth">EPS Gr%</th>
+        <th class="sortable th-num" data-col="pe_ratio">P/E</th>
+        <th class="sortable th-num" data-col="peg_ratio">PEG</th>
+        <th class="sortable th-num" data-col="roe">ROE%</th>
+        <th class="sortable th-num" data-col="debt_equity">D/E</th>
+        <th class="sortable th-num" data-col="fcf">FCF</th>
+        <th class="sortable th-num" data-col="insider_own">Insider%</th>
+        <th class="sortable th-num" data-col="inst_own">Inst%</th>
+        <th class="sortable th-num" data-col="price_mom_6m">Mom 6M</th>
+        <th class="sortable th-num" data-col="price_mom_12m">Mom 12M</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="table-empty" id="table-empty-desk">
+    <div class="empty-icon">&#128225;</div>
+    <div class="empty-title">No data yet</div>
+    <div class="empty-sub">Click <strong>Scan Now</strong> to scan ~130 global stocks</div>
+  </div>
+</div>
+
+<!-- MOBILE CARDS -->
+<div class="mobile-cards" id="mobile-cards"></div>
+<div class="table-empty" id="table-empty-mobile" style="display:none">
+  <div class="empty-icon">&#128225;</div>
+  <div class="empty-title">No data yet</div>
+  <div class="empty-sub">Tap <strong>Scan Now</strong> to start</div>
+</div>
+
+<div class="statusbar">
+  <span id="status-msg">Click "Scan Now" to begin</span>
+  <span class="status-right">Yahoo Finance · Not financial advice</span>
+</div>
+
+<!-- DETAIL DRAWER -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div>
+      <div class="drawer-ticker" id="d-ticker">—</div>
+      <div class="drawer-name"   id="d-name"></div>
+    </div>
+    <button class="drawer-close" onclick="closeDrawer()">&#10005;</button>
+  </div>
+  <div class="drawer-score-row">
+    <div class="drawer-score-box total">
+      <div class="dsb-label">Total</div>
+      <div class="dsb-val" id="d-total">—</div>
+      <div class="dsb-max">/100</div>
+    </div>
+    <div class="drawer-score-box growth">
+      <div class="dsb-label">Growth</div>
+      <div class="dsb-val" id="d-growth">—</div>
+      <div class="dsb-max">/40</div>
+    </div>
+    <div class="drawer-score-box value">
+      <div class="dsb-label">Value</div>
+      <div class="dsb-val" id="d-value">—</div>
+      <div class="dsb-max">/30</div>
+    </div>
+    <div class="drawer-score-box quality">
+      <div class="dsb-label">Quality</div>
+      <div class="dsb-val" id="d-quality">—</div>
+      <div class="dsb-max">/30</div>
+    </div>
+  </div>
+  <div class="drawer-meta" id="d-meta"></div>
+  <div class="drawer-grid" id="d-grid"></div>
+  <div class="drawer-footer">Fetched <span id="d-time">—</span> · Yahoo Finance</div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
